@@ -89,7 +89,7 @@ if __name__ == '__main__':
 	skr = Popen(os.path.join(METAMAP_PATH, 'skrmedpostctl_start.bat'))
 	
 	try:
-		app.run()
+		app.run(debug=True)
 	except:
 		skr.terminate()
 	else:
