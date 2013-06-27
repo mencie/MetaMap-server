@@ -1,4 +1,4 @@
-from structures import Concept, Pack
+from structures import Pack
 
 # Takes the given XML file, reads information from it, and writes the
 # information in JSON format to the given output file.
@@ -15,6 +15,8 @@ def parse_xml(fxml, fjson):
 	f = open(fjson, 'w')
 	f.write(text)
 	f.close()
+	
+	return info, text
 
 # Reads concepts from the XML file.
 def get_concepts(k, lines, n):
@@ -54,16 +56,16 @@ def get_concepts(k, lines, n):
 
 # Pulls necessary information from a "<Negation>" section
 def parse_negation(k, lines, n):
-	neg = Concept()
+	neg = {}
 	
 	while '</Negation>' not in lines[k]:
 		
 		if '<NegConcPI>' in lines[k]:
-			neg.set_position(n, get_cont(lines[k+1]),
-				get_cont(lines[k+2]))
+			neg['Position'] = ( n, int(get_cont(lines[k+1])),
+				int(get_cont(lines[k+2])) )
 			k += 2
 		elif '<NegConcMatched>' in lines[k]:
-			neg.set_match(get_cont(lines[k]))
+			neg['Match'] = get_cont(lines[k])
 		
 		k += 1
 	
@@ -71,24 +73,24 @@ def parse_negation(k, lines, n):
 
 # Pulls necessary concepts from a "<Mapping><Candidate>" section
 def parse_candidate(k, lines, n):
-	m = Concept()
+	m = {}
 	
 	while '</Candidate>' not in lines[k]:
 		
 		if '<CandidateScore>' in lines[k]:
-			m.set_score(get_cont(lines[k]))
+			m['Score'] = -int(get_cont(lines[k]))
 		elif '<CandidateCUI>' in lines[k]:
-			m.set_cui(get_cont(lines[k]))
+			m['CUI'] = get_cont(lines[k])
 		elif '<CandidateMatched>' in lines[k]:
-			m.set_match(get_cont(lines[k]))
+			m['Match'] = get_cont(lines[k])
 		elif '<CandidatePreferred>' in lines[k]:
-			m.set_concept(get_cont(lines[k]))
+			m['Concept'] = get_cont(lines[k])
 		elif '<Sources' in lines[k]:
 			k, s = get_sources(k+1, lines)
-			m.set_sources(s)
+			m['Sources'] = s
 		elif '<ConceptPI>' in lines[k]:
-			m.set_position(n, get_cont(lines[k+1]),
-				get_cont(lines[k+2]))
+			m['Position'] = ( n, int(get_cont(lines[k+1])),
+				int(get_cont(lines[k+2])) )
 			k += 2
 		
 		k += 1
