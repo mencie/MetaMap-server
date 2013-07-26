@@ -1,15 +1,25 @@
 import os
+import traceback
 from subprocess import Popen
 from flask import Flask, request, redirect, url_for
 from parse import parse_xml
 from settings import METAMAP_PATH, METAMAP_VERSION
 
+'''
+WORDS WHICH METAMAP DOES NOT PLAY NICELY WITH:
+	pheochromocytomy
+	enterography
+	lyphoma
+	lymphona
+	lymphopiothopy
+	saity
+'''
 
 app = Flask(__name__)
 
 TEMP_UPLOAD = 'tmp_up.txt'
 TEMP_XML = 'tmp_xml.txt'
-OUTPUT_FOLDER = 'Outputs'
+DEFAULT_OUTPUT_FOLDER = 'Outputs'
 DEFAULT_OUTPUT_FILE = 'tmp_out.txt'
 
 # Front page. Gets either text or a file to parse
@@ -17,65 +27,46 @@ DEFAULT_OUTPUT_FILE = 'tmp_out.txt'
 def get_input():
 	if request.method == 'POST':
 		content = request.form['input']
-		title = request.form['title']
-		upload = request.files['file']
-		if content:
-			if title: name = title + ".txt"
-			else: name = DEFAULT_OUTPUT_FILE
+		
+		use_wsd = 'wsd' in request.form
+		
+		if content.strip():
+			content += '\n'
 			
-			tmp = open(TEMP_UPLOAD, 'w')
-			tmp.write(content)
-			tmp.close()
-		elif upload:
-			name = upload.filename
-			upload.save(TEMP_UPLOAD)
+			with open(TEMP_UPLOAD, 'w') as f:
+				f.write(content)
 		else:
 			return redirect('/')
 		
-		ensure_dir(OUTPUT_FOLDER)
+		to_xml(TEMP_UPLOAD, TEMP_XML, use_wsd)
 		
-		to_xml(TEMP_UPLOAD, TEMP_XML)
-		parse_xml(TEMP_XML, os.path.join(OUTPUT_FOLDER, name))
-		
-		return redirect(url_for('display_output', filename=name))
+		return parse_xml(TEMP_XML)
+	
 	return '''
 	<!doctype html>
 	<title>Upload Text</title>
 	<h1>Upload content to parse</h1>
-	<form action="" method=post enctype=multipart/form-data>
+	<form action="" method=post enctype=application/x-www-form-urlencoded>
 		<br><h3>Upload text:</h3>
-			Title:<br><input type=text name=title><br>
-			Content:<br>
 			<textarea rows=10 cols=100 name=input></textarea><br>
+			<input type=checkbox name=wsd value=true>Use word-sense
+				disambiguation<br><br>
 			<input type=submit value=Submit>
-		<br><br><br>
-		<h3>Upload File:</h3>
-			<input type=file name=file>
-			<input type=submit value=Upload>
 	</form>
 	'''
 
-# Displays output from a given text input
-@app.route('/<filename>')
-def display_output(filename):
-	f = open(os.path.join(OUTPUT_FOLDER, filename))
-	content = ''
-	for line in f:
-		content += line.replace(' ', '&nbsp') + '<br>'
+# Runs MetaMap given in- and out-filenames and the WSD option.
+def to_xml(fin, fout, use_wsd):
+	# Wipe the XML file
+	with open(fout, 'w') as f:
+		f.write('')
 	
-	return '''
-	<!doctype html>
-	<form action="/" method=get>
-		<p><input type=submit value="Choose new file">
-	</form>
-	<br><br>
-	''' + content
-
-# Runs MetaMap given in- and out-filenames. Returns output in formatted
-# XML.
-def to_xml(fin, fout):
-	mm = Popen([os.path.join(METAMAP_PATH, METAMAP_VERSION),
-		'--XMLf', fin, fout])
+	if use_wsd:
+		mm = Popen([os.path.join(METAMAP_PATH, METAMAP_VERSION),
+			'--XMLf -y', fin, fout])
+	else:
+		mm = Popen([os.path.join(METAMAP_PATH, METAMAP_VERSION),
+			'--XMLf', fin, fout])
 	mm.wait()
 
 # Ensures that the specified directory exists. If it does not exist,
@@ -87,10 +78,14 @@ def ensure_dir(d):
 # Setup and teardown for the server
 if __name__ == '__main__':
 	skr = Popen(os.path.join(METAMAP_PATH, 'skrmedpostctl_start.bat'))
+	wsd = Popen(os.path.join(METAMAP_PATH, 'wsdserverctl_start.bat'))
 	
 	try:
 		app.run(debug=True)
 	except:
 		skr.terminate()
+		wsd.terminate()
+		traceback.print_exc()
 	else:
 		skr.terminate()
+		wsd.terminate()

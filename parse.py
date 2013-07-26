@@ -1,22 +1,20 @@
-from structures import Pack
+from flask import jsonify
 
-# Takes the given XML file, reads information from it, and writes the
-# information in JSON format to the given output file.
-def parse_xml(fxml, fjson):
-	f = open(fxml, 'r')
-	lines = f.readlines()
-	f.close()
+
+# Takes the given XML file, reads information from it, and returns the
+# JSON-formatted information as a string.
+def parse_xml(fxml):
+	with open(fxml, 'r') as f:
+		lines = f.readlines()
+	
+	if len(lines) == 0:
+		return ''
 	
 	negations, mappings = get_concepts(0, lines, 0)
 	
-	info = Pack(negations, mappings)
-	text = info.to_json()
+	all = consolidate(negations, mappings)
 	
-	f = open(fjson, 'w')
-	f.write(text)
-	f.close()
-	
-	return info, text
+	return jsonify(**all)
 
 # Reads concepts from the XML file.
 def get_concepts(k, lines, n):
@@ -60,11 +58,11 @@ def parse_negation(k, lines, n):
 	
 	while '</Negation>' not in lines[k]:
 		
-		if '<NegConcPI>' in lines[k]:
+		'''if '<NegConcPI>' in lines[k]:
 			neg['Position'] = ( n, int(get_cont(lines[k+1])),
 				int(get_cont(lines[k+2])) )
-			k += 2
-		elif '<NegConcMatched>' in lines[k]:
+			k += 2'''
+		if '<NegConcMatched>' in lines[k]:
 			neg['Match'] = get_cont(lines[k])
 		
 		k += 1
@@ -88,10 +86,10 @@ def parse_candidate(k, lines, n):
 		elif '<Sources' in lines[k]:
 			k, s = get_sources(k+1, lines)
 			m['Sources'] = s
-		elif '<ConceptPI>' in lines[k]:
+		'''elif '<ConceptPI>' in lines[k]:
 			m['Position'] = ( n, int(get_cont(lines[k+1])),
 				int(get_cont(lines[k+2])) )
-			k += 2
+			k += 2'''
 		
 		k += 1
 	
@@ -117,3 +115,38 @@ def get_cont(line):
 	ltag, rest = line.split('>', 1)
 	content, rtag = rest.split('<', 1)
 	return content
+
+# Consolidates negations and mappings into a single dictionary
+def consolidate(negations, mappings):
+	all = { 'Negations':[], 'Mappings':[] }
+	mappings = trim(mappings)
+	
+	negList = [ n['Match'] for n in negations ]
+	for m in mappings:
+		if m['Match'] in negList:
+			m['Negated'] = True
+		else:
+			m['Negated'] = False
+		
+		#del m['Position']
+		all['Mappings'].append(m)
+	
+	for n in negations:
+		#del n['Position']
+		all['Negations'].append(n)
+	
+	return all
+
+# Removes repeated mapping entries
+def trim(items):
+	cuis = set([elem['CUI'] for elem in items])
+	
+	for elem in items[:]:
+		if elem['CUI'] in cuis:
+			cuis.remove(elem['CUI'])
+		else:
+			items.remove(elem)
+	
+	return items
+
+
